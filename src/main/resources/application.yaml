@@ -1,3 +1,27 @@
 spring:
   application:
     name: streaming-service
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+server:
+  port: 8083
+
+aws:
+  access-key: ${AWS_ACCESS_KEY}
+  secret-key: ${AWS_SECRET_KEY}
+  region: ${REGION}
+  s3:
+    bucket-name: ${BUCKET_NAME}
+    presigned-url-expiry: ${PRESIGNED_URL_EXPIRY:60}
+
+streaming:
+  base_url: ${STREAMING_BASE_URL:http://localhost:8083}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
