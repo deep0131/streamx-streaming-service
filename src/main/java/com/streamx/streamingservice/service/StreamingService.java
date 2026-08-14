@@ -47,15 +47,9 @@ public class StreamingService {
     private final static String REWRITTEN_PLAYLIST_CACHE_PREFIX = "streaming:rewritten:";
 
     /**
-     * Generate a playlist URL for the given movie.
-     * The returned URL is not a direct s3 URL.
+     * Generates the application playlist URL for the given movie.
      *
-     * FLOW:
-     * 1. Check if the presigned URL is cached in Redis.
-     * 2. If cached, return the cached URL.
-     * 3. If not cached, generate a new presigned URL using S3Presigner.
-     * 4. Cache the new presigned URL in Redis with an expiration time.
-     * 5. Return the presigned URL.
+     * The returned URL points to our streaming service, not directly to S3.
      */
     public StreamingResponse getStreamingUrl(String movieId) {
 
@@ -72,7 +66,6 @@ public class StreamingService {
                 .movieId(movieId)
                 .streamingUrl(playlistUrl)
                 .quality("1080p, 720p, 480p")
-                .expiresInMinutes(presignedUrlExpiryInMinutes)
                 .build();
     }
 
@@ -92,20 +85,11 @@ public class StreamingService {
     }
 
     /**
-     * Read m3u8 file from S3 and rewrite all
-     * segment URLs with presigned URLs.
+     * Reads an HLS playlist from S3 and rewrites its resource URLs.
      *
-     * This is the KEY method that makes everything secure.
+     * Child playlists (.m3u8) are converted to application URLs.
+     * Media segments (.ts) are converted to S3 presigned URLs.
      *
-     * Original m3u8:
-     * #EXTM3U
-     * 1080p/playlist.m3u8
-     * 720p/playlist.m3u8
-     *
-     * Rewritten m3u8:
-     * #EXTM3U
-     * https://s3.../1080p/playlist.m3u8?X-Amz-Signature=...
-     * https://s3.../720p/playlist.m3u8?X-Amz-Signature=...
      */
     public String getSignedPlaylist(String movieId, String playlistPath) {
         log.info("Getting signed playlist for movie: {} path: {}",
@@ -207,14 +191,17 @@ public class StreamingService {
 
                 rewritten.append(playlistUrl).append("\n");
             }
-            else {
+            else if (trimmed.endsWith(".ts")) {
                 /*
                  * Media segment: Signed url for .ts segments file
                  * Give the player a temporary S3 URL.
                  */
                 String signedUrl = generatePresignedUrl(fullKey);
-
                 rewritten.append(signedUrl).append("\n");
+            }
+            else {
+                // Unknown line, just copy it
+                rewritten.append(line).append("\n");
             }
         }
 
@@ -268,7 +255,7 @@ public class StreamingService {
         return s3Presigner.presignGetObject(presignRequest).url().toString();
     }
 
-    public void invalidateCachedUrl(String movieId) {
+    public void invalidateCachedPlaylist(String movieId) {
         String[] playlistPaths = {
                 "encoded/" + movieId + "/master.m3u8",
                 "encoded/" + movieId + "/1080p/playlist.m3u8",

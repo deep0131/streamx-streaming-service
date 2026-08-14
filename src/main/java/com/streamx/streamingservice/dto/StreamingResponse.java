@@ -14,5 +14,4 @@ public class StreamingResponse {
     private String movieId;
     private String streamingUrl;
     private String quality;
-    private long expiresInMinutes;
 }
